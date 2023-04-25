@@ -14,6 +14,7 @@ CHEXPERT_MASTER_CSV = (
 CHEXPERT_TRAIN_DIR = CHEXPERT_DATA_DIR / "train"
 CHEXPERT_TEST_DIR = CHEXPERT_DATA_DIR / "valid"
 CHEXPERT_5x200 = CHEXPERT_DATA_DIR / "chexpert_8x200.csv"
+ISIC_test_csv = "/scratch/ssc10020/IndependentStudy/SLIP/dataset/ISIC/test_data.csv"
 
 CHEXPERT_VALID_NUM = 5000
 CHEXPERT_VIEW_COL = "Frontal/Lateral"
@@ -166,4 +167,21 @@ CHEXPERT_CLASS_PROMPTS = {
             "bilateral pleural effusion",
         ],
     },
+}
+
+PATH_CLASS_PROMPTS = {
+    "NV": "The patient has NV skin lesion.",
+    "SCC": "The patient has SCC skin lesion.",
+    "BKL": "The patient has BKL skin lesion.",
+    "AK": "The patient has AK skin lesion.",
+    "BCC": "The patient has BCC skin lesion.",
+    "MEL": "The patient has MEL skin lesion.",
+    "DF": "The patient has DF skin lesion.",
+    "VASC": "The patient has VASC skin lesion."
+}
+
+PATH_CLASS_PROMPTS = {
+    "MALIGNANT": "The patient has MALIGNANT pathology.",
+    "BENIGN": "The patient has BENIGN pathology.",
+    "BENIGN_WITHOUT_CALLBACK": "The patient has BENIGN_WITHOUT_CALLBACK pathology.",
 }

@@ -42,7 +42,7 @@ def get_parser():
     parser.add_argument(
         "--ckpt_path", type=str, default=None, help="Checkpoint path for the save model"
     )
-    parser.add_argument("--random_seed", type=int, default=23, help="Random seed")
+    parser.add_argument("--random_seed", type=int, default=77, help="Random seed")
     parser.add_argument(
         "--train_pct", type=float, default=1.0, help="Percent of training data"
     )
@@ -52,6 +52,7 @@ def get_parser():
         default=1,
         help="Train on n number of splits used for training. Defaults to 1",
     )
+    
     parser = Trainer.add_argparse_args(parser)
 
     return parser
@@ -105,6 +106,7 @@ def main(cfg, args):
     if args.train:
         trainer.fit(model, dm)
     if args.test:
+        print("testing now")
         ckpt_path = (
             checkpoint_callback.best_model_path if args.train else cfg.model.checkpoint
         )
@@ -140,7 +142,7 @@ if __name__ == "__main__":
         timestamp = now.strftime("%Y_%m_%d_%H_%M_%S")
 
         # random seed
-        args.random_seed = split + 1
+        # args.random_seed = split + 1
         seed_everything(args.random_seed)
 
         # set directory names

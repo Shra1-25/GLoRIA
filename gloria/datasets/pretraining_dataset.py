@@ -1,5 +1,6 @@
 import re
 import os
+from GLoRIA.GLoRIA.gloria.models import gloria_model
 import numpy as np
 import pandas as pd
 import cv2
@@ -13,7 +14,27 @@ from PIL import Image
 from nltk.tokenize import RegexpTokenizer
 from transformers import AutoTokenizer
 from gloria.constants import *
+from transformers import DistilBertTokenizer
 
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+from collections import defaultdict
+import json
+import os
+import pickle
+import zipfile
+
+import numpy as np
+from PIL import Image, ImageFile
+
+import torch
+from torchvision import transforms
+from torchvision import datasets as t_datasets
+
+import pandas as pd
 
 class MultimodalPretrainingDataset(data.Dataset):
     def __init__(self, cfg, split="train", transform=None):
@@ -254,13 +275,14 @@ def multimodal_collate_fn(batch):
 
     # flattern
     for b in batch:
-        img, cap, cap_l, p = b
+        img, cap, cap_l, p, target = b
         imgs.append(img)
         cap_len.append(cap_l)
         ids.append(cap["input_ids"])
         tokens.append(cap["token_type_ids"])
         attention.append(cap["attention_mask"])
         path.append(p)
+        
 
     # stack
     imgs = torch.stack(imgs)
@@ -280,3 +302,134 @@ def multimodal_collate_fn(batch):
     }
 
     return return_dict
+
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+diagnosis_map = {"NV":0, "SCC":1, "BKL":2, "AK":3, "BCC":4, "MEL":5, "DF":6, "VASC":7}
+# diagnosis_map = {"MALIGNANT":0, "BENIGN":1, "BENIGN_WITHOUT_CALLBACK":2}
+
+def pil_loader(path):
+    # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
+    with open(path, 'rb') as f:
+        img = Image.open(f)
+        return img.convert('RGB')
+
+
+def yfcc_loader(root, index):
+    index = format(index, "0>8d")
+    repo = index[:2]
+    z = index[2: 5]
+    file_img = index[5:] + '.jpg'
+    path_zip = os.path.join(root, 'images', repo, z) + '.zip'
+    with zipfile.ZipFile(path_zip, 'r') as myzip:
+        img = Image.open(myzip.open(file_img))
+    return img.convert('RGB')
+
+class ISICTestDataset(torch.utils.data.Dataset):
+    def __init__(self, root, device, context_length=26):
+        annotations = pd.read_csv(os.path.join(root,'test_data.csv'))
+        self.samples = [(annotations.loc[i,'image_name'], annotations.loc[i, 'description'], annotations.loc[i,'diagnosis']) for i in range(len(annotations))]
+        self.root = root
+        self.context_length=context_length
+        self.device=device
+    def __getitem__(self, i):
+        image_id, caption, target = self.samples[i]
+        path = os.path.join(self.root, 'full_data/', image_id)
+        image = gloria_model.process_img(path, self.device)
+        target = diagnosis_map[target]
+        # caption = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
+        return image, target
+    def __len__(self):
+        return len(self.samples)
+
+class ISICTrainDataset(torch.utils.data.Dataset):
+    def __init__(self, cfg, transform, split="train", context_length=26):
+        self.cfg = cfg
+        if split=="valid":
+            csv_path = os.path.join(self.cfg.data.root, 'val_split_metadata.csv')
+        elif split=="test":
+            csv_path = os.path.join(self.cfg.data.root, 'test_data.csv')
+        else:
+            csv_path = os.path.join(self.cfg.data.root, 'train_split_metadata.csv')
+
+        annotations = pd.read_csv(csv_path)
+        self.samples = [(annotations.loc[i,'image_name'], annotations.loc[i, 'description'], annotations.loc[i,'diagnosis']) for i in range(len(annotations))]
+        self.root = self.cfg.data.root
+        self.transform = transform
+        # create BERT tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type) 
+
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+        # normalize = transforms.Normalize(mean=[170.611, 134.134, 132.450], std=[10.039, 8.356, 8.342])
+        self.context_length = context_length
+
+    def __getitem__(self, i):
+        image_id, caption, target = self.samples[i]
+        path = os.path.join(self.root, 'full_data/', image_id)
+        img = pil_loader(path)
+        image = self.transform(img)
+        target = diagnosis_map[target]
+        tokens = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
+        x_len = len([t for t in tokens["input_ids"][0] if t != 0])
+        return image, tokens, x_len, image_id, target
+    def __len__(self):
+        return len(self.samples)
+
+class CBISValDataset(torch.utils.data.Dataset):
+    def __init__(self, cfg, transform, split="valid", context_length=26):
+        val_path = os.path.join(cfg.data.root, 'val_split_metadata.csv')
+        annotations = pd.read_csv(val_path)
+        self.samples = [(annotations.loc[i,'image_path'], annotations.loc[i, 'description'], annotations.loc[i,'pathology']) for i in range(len(annotations))]
+        self.root = cfg.data.root
+        self.transform = transform
+        # self.tokenizer = tokenizer 
+        self.context_length=context_length
+    def __getitem__(self, i):
+        image_id, caption, target = self.samples[i]
+        path = os.path.join(self.root, image_id)
+        img = pil_loader(path)
+        image = self.transform(img)
+        target = diagnosis_map[target]
+        # caption = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
+        
+        return image, caption, target
+    def __len__(self):
+        return len(self.samples)
+
+class CBISTrainDataset(torch.utils.data.Dataset):
+    def __init__(self, cfg, transform, split="train", context_length=26):
+        self.cfg = cfg
+        if split=="valid":
+            csv_path = os.path.join(self.cfg.data.root, 'val_split_metadata.csv')
+        elif split=="test":
+            csv_path = os.path.join(self.cfg.data.root, 'test_data.csv')
+        else:
+            csv_path = os.path.join(self.cfg.data.root, 'train_split_metadata.csv')
+        annotations = pd.read_csv(csv_path)
+        self.samples = [(annotations.loc[i,'image_path'], annotations.loc[i, 'description'], annotations.loc[i,'pathology']) for i in range(len(annotations))]
+        self.root = self.cfg.data.root
+        self.transform = transform
+        # create BERT tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type) 
+
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+        # normalize = transforms.Normalize(mean=[170.611, 134.134, 132.450], std=[10.039, 8.356, 8.342])
+        
+        self.context_length = context_length
+
+    def __getitem__(self, i):
+        image_id, caption, target = self.samples[i]
+        path = os.path.join(self.root, image_id)
+        img = pil_loader(path)
+        image = self.transform(img)
+        target = diagnosis_map[target]
+        tokens = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
+        x_len = len([t for t in tokens["input_ids"][0] if t != 0])
+
+        return image, tokens, x_len, image_id, target
+    def __len__(self):
+        return len(self.samples)

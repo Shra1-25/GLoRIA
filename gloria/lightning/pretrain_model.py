@@ -25,6 +25,8 @@ class PretrainModel(LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
     def training_step(self, batch, batch_idx):
+        # import pdb
+        # pdb.set_trace()
         loss, attn_maps, sents = self.shared_step(batch, "train")
 
         # get attention map image
@@ -37,6 +39,9 @@ class PretrainModel(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        # import pdb
+        # pdb.set_trace()
+        print("Running valid")
         loss, _, _ = self.shared_step(batch, "val")
         return loss
 
@@ -60,3 +65,5 @@ class PretrainModel(LightningModule):
         )
 
         return loss, attn_maps, sents
+    
+    

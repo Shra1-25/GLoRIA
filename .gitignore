@@ -129,3 +129,9 @@ dmypy.json
 .pyre/
 
 data/
+
+*.ckpt
+*.pt
+*pth
+*.txt
+*.out

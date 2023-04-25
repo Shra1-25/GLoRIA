@@ -18,7 +18,7 @@ random.seed(6)
 
 
 _MODELS = {
-    "gloria_resnet50": "./pretrained/chexpert_resnet50.ckpt",
+    "gloria_resnet50": "./pretrained/ISIC_resnet50_seed_4804.ckpt",
     "gloria_resnet18": "./pretrained/chexpert_resnet18.ckpt",
 }
 
@@ -237,7 +237,7 @@ def get_similarities(gloria_model, imgs, txts, similarity_type="both"):
         return similarities.detach().cpu().numpy()
 
 
-def zero_shot_classification(gloria_model, imgs, cls_txt_mapping):
+def zero_shot_classification(gloria_model, imgs_loader, cls_txt_mapping):
     """Load a GLoRIA pretrained classification model
 
     Parameters
@@ -257,12 +257,15 @@ def zero_shot_classification(gloria_model, imgs, cls_txt_mapping):
 
     # get similarities for each class
     class_similarities = []
-    for cls_name, cls_txt in cls_txt_mapping.items():
-        similarities = get_similarities(
-            gloria_model, imgs, cls_txt, similarity_type="both"
-        )
-        cls_similarity = similarities.max(axis=1)  # average between class prompts
-        class_similarities.append(cls_similarity)
+    targets = []
+    for i,(imgs,target) in enumerate(imgs_loader):
+        for cls_name, cls_txt in cls_txt_mapping.items():
+            similarities = get_similarities(
+                gloria_model, imgs, cls_txt, similarity_type="both"
+            )
+            cls_similarity = similarities.max(axis=1)  # average between class prompts
+            class_similarities.append(cls_similarity)
+        targets.extend(target)
     class_similarities = np.stack(class_similarities, axis=1)
 
     # normalize across class
@@ -303,4 +306,24 @@ def generate_chexpert_class_prompts(n: int = 5):
                     cls_prompts.append(f"{k0} {k1} {k2}")
 
         prompts[k] = random.sample(cls_prompts, n)
+    return prompts
+
+def generate_path_class_prompts(n: int = 5):
+    """Generate text prompts for each CheXpert classification task
+
+    Parameters
+    ----------
+    n:  int
+        number of prompts per class
+
+    Returns
+    -------
+    class prompts : dict
+        dictionary of class to prompts
+    """
+
+    prompts = {}
+    for k, v in constants.PATH_CLASS_PROMPTS.items():
+    
+        prompts[k] = v # random.sample(cls_prompts, n)
     return prompts

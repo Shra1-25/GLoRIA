@@ -3,12 +3,12 @@ phase: 'pretrain'
 
 lightning:
     trainer:
-       gpus: '1'
-       max_epochs: 50
+       gpus: '0'
+       max_epochs: 25
        distributed_backend: 'dp'
-       gradient_clip_val: 0.25
-       lr: 0.00005
-       precision: 16
+    #    gradient_clip_val: 0.25
+       lr: 1e-4 # 0.00005
+       precision: 32
     checkpoint_callback:
         monitor: 'val_loss'
         dirpath: './data/ckpt'
@@ -35,7 +35,7 @@ model:
         temp2: 5.0
         temp3: 10.0
     vision:
-        model_name: 'resnet_50'
+        model_name: 'resnet_50' # 'vit_base_patch16_384'
         freeze_cnn: false
         pretrained: true
     text:  
@@ -47,22 +47,23 @@ model:
         freeze_bert: false
         agg_tokens: true
 data: 
-    dataset: chexpert
+    dataset: isic
     text: 
-      word_num: 97
-      captions_per_image: 5
+      word_num: 26 # 97
+      captions_per_image: 1 # 5
       full_report: false
     image:
-        imsize: 256
+        imsize: 384
+    root: "/scratch/ssc10020/IndependentStudy/SLIP/dataset/ISIC/"
 
 transforms: 
     norm: 'half'
     random_crop:
-        crop_size: 224
+        crop_size: 384
 
 train: 
     update_interval: 1000
-    batch_size: 48
+    batch_size: 32
     num_workers: 18
     nvis: 8
     rand_vis: false 

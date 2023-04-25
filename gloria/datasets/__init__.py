@@ -7,4 +7,6 @@ DATA_MODULES = {
     "chexpert": data_module.CheXpertDataModule,
     "pneumothorax": data_module.PneumothoraxDataModule,
     "pneumonia": data_module.PneumoniaDataModule,
+    "isic": data_module.ISICDataModule,
+    "cbis": data_module.CBISDataModule,
 }
