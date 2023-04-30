@@ -18,7 +18,11 @@ random.seed(6)
 
 
 _MODELS = {
-    "gloria_resnet50": "./pretrained/ISIC_resnet50_seed_4804.ckpt",
+    "gloria_resnet50_ISIC_seed_77": "./pretrained/ISIC_resnet50_seed_77.ckpt",
+    "gloria_resnet50_ISIC_seed_123": "./pretrained/ISIC_resnet50_seed_123.ckpt",
+    "gloria_resnet50_ISIC_seed_4804": "./pretrained/ISIC_resnet50_seed_4804.ckpt",
+    "gloria_resnet50_ISIC_seed_65967": "./pretrained/ISIC_resnet50_seed_65967.ckpt",
+    "gloria_resnet50_ISIC_seed_3098592": "./pretrained/ISIC_resnet50_seed_3098592.ckpt",
     "gloria_resnet18": "./pretrained/chexpert_resnet18.ckpt",
 }
 
@@ -28,7 +32,13 @@ _SEGMENTATION_MODELS = {
 }
 
 
-_FEATURE_DIM = {"gloria_resnet50": 2048, "gloria_resnet18": 2048}
+_FEATURE_DIM = {"gloria_resnet50_ISIC_seed_77": 2048,
+                "gloria_resnet50_ISIC_seed_123": 2048,
+                "gloria_resnet50_ISIC_seed_4804": 2048,
+                "gloria_resnet50_ISIC_seed_65967": 2048,
+                "gloria_resnet50_ISIC_seed_3098592": 2048,
+                "gloria_resnet18": 2048,
+                }
 
 
 def available_models() -> List[str]:
@@ -214,7 +224,7 @@ def get_similarities(gloria_model, imgs, txts, similarity_type="both"):
         raise RuntimeError(
             f"Image input not processed - please use gloria_model.process_img"
         )
-
+    # import pdb; pdb.set_trace()
     # get global and local image features
     with torch.no_grad():
         img_emb_l, img_emb_g = gloria_model.image_encoder_forward(imgs)
@@ -256,26 +266,33 @@ def zero_shot_classification(gloria_model, imgs_loader, cls_txt_mapping):
     """
 
     # get similarities for each class
-    class_similarities = []
-    targets = []
-    for i,(imgs,target) in enumerate(imgs_loader):
+    
+    all_targets = []
+    all_class_similarities = np.zeros((1,len(cls_txt_mapping.keys())))
+    for i,batch in enumerate(imgs_loader):
+        imgs = batch['imgs'].cuda()
+        targets = batch['targets']
+        class_similarities = []
         for cls_name, cls_txt in cls_txt_mapping.items():
             similarities = get_similarities(
                 gloria_model, imgs, cls_txt, similarity_type="both"
             )
             cls_similarity = similarities.max(axis=1)  # average between class prompts
             class_similarities.append(cls_similarity)
-        targets.extend(target)
-    class_similarities = np.stack(class_similarities, axis=1)
-
+        
+        class_similarities = np.stack(class_similarities, axis=1)
+        all_class_similarities = np.concatenate((all_class_similarities, class_similarities), axis=0)
+        all_targets.extend(targets)
+    
+    all_class_similarities = all_class_similarities[1:]
     # normalize across class
-    if class_similarities.shape[0] > 1:
-        class_similarities = utils.normalize(class_similarities)
-    class_similarities = pd.DataFrame(
-        class_similarities, columns=cls_txt_mapping.keys()
+    if all_class_similarities.shape[0] > 1:
+        all_class_similarities = utils.normalize(all_class_similarities)
+    all_class_similarities = pd.DataFrame(
+        all_class_similarities, columns=cls_txt_mapping.keys()
     )
 
-    return class_similarities
+    return all_class_similarities, np.array(all_targets)
 
 
 def generate_chexpert_class_prompts(n: int = 5):
@@ -309,7 +326,7 @@ def generate_chexpert_class_prompts(n: int = 5):
     return prompts
 
 def generate_path_class_prompts(n: int = 5):
-    """Generate text prompts for each CheXpert classification task
+    """Generate text prompts for each Pathology classification task
 
     Parameters
     ----------

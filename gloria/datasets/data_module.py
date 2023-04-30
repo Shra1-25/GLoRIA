@@ -103,7 +103,10 @@ class ISICDataModule(pl.LightningDataModule):
 
         self.cfg = cfg
         self.dataset = pretraining_dataset.ISICTrainDataset
-        self.collate_fn = pretraining_dataset.multimodal_collate_fn
+        if self.cfg.type=='multimodal':
+            self.collate_fn = pretraining_dataset.multimodal_collate_fn
+        elif self.cfg.type=='unimodal':
+            self.collate_fn = pretraining_dataset.unimodal_collate_fn
 
     def train_dataloader(self):
         transform = builder.build_transformation(self.cfg, "train")
@@ -140,6 +143,7 @@ class ISICDataModule(pl.LightningDataModule):
             shuffle=False,
             batch_size=self.cfg.train.batch_size,
             num_workers=self.cfg.train.num_workers,
+            collate_fn=self.collate_fn,
         )
 
 class CBISDataModule(pl.LightningDataModule):
@@ -173,6 +177,7 @@ class CBISDataModule(pl.LightningDataModule):
             shuffle=False,
             batch_size=self.cfg.train.batch_size,
             num_workers=self.cfg.train.num_workers,
+            collate_fn=self.collate_fn,
         )
 
     def test_dataloader(self):
@@ -184,6 +189,7 @@ class CBISDataModule(pl.LightningDataModule):
             shuffle=False,
             batch_size=self.cfg.train.batch_size,
             num_workers=self.cfg.train.num_workers,
+            collate_fn=self.collate_fn,
         )
 
 class PneumothoraxDataModule(pl.LightningDataModule):

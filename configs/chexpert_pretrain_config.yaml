@@ -1,5 +1,6 @@
 experiment_name: 'gloria_pretrain'
 phase: 'pretrain'
+type: 'multimodal'
 
 lightning:
     trainer:
@@ -47,14 +48,14 @@ model:
         freeze_bert: false
         agg_tokens: true
 data: 
-    dataset: isic
+    dataset: cbis
     text: 
       word_num: 26 # 97
       captions_per_image: 1 # 5
       full_report: false
     image:
         imsize: 384
-    root: "/scratch/ssc10020/IndependentStudy/SLIP/dataset/ISIC/"
+    root: "/scratch/ssc10020/IndependentStudy/SLIP/dataset/CBIS/"
 
 transforms: 
     norm: 'half'

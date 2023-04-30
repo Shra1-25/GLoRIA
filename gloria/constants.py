@@ -169,6 +169,7 @@ CHEXPERT_CLASS_PROMPTS = {
     },
 }
 
+DIAGNOSIS_MAP = {"NV":0, "SCC":1, "BKL":2, "AK":3, "BCC":4, "MEL":5, "DF":6, "VASC":7}
 PATH_CLASS_PROMPTS = {
     "NV": "The patient has NV skin lesion.",
     "SCC": "The patient has SCC skin lesion.",
@@ -180,8 +181,8 @@ PATH_CLASS_PROMPTS = {
     "VASC": "The patient has VASC skin lesion."
 }
 
-PATH_CLASS_PROMPTS = {
-    "MALIGNANT": "The patient has MALIGNANT pathology.",
-    "BENIGN": "The patient has BENIGN pathology.",
-    "BENIGN_WITHOUT_CALLBACK": "The patient has BENIGN_WITHOUT_CALLBACK pathology.",
-}
+# PATH_CLASS_PROMPTS = {
+#     "MALIGNANT": "The patient has MALIGNANT pathology.",
+#     "BENIGN": "The patient has BENIGN pathology.",
+#     "BENIGN_WITHOUT_CALLBACK": "The patient has BENIGN_WITHOUT_CALLBACK pathology.",
+# }

@@ -1,6 +1,7 @@
+from asyncio import constants
 import re
 import os
-from GLoRIA.GLoRIA.gloria.models import gloria_model
+# from GLoRIA.GLoRIA.gloria.models import gloria_model
 import numpy as np
 import pandas as pd
 import cv2
@@ -15,6 +16,7 @@ from nltk.tokenize import RegexpTokenizer
 from transformers import AutoTokenizer
 from gloria.constants import *
 from transformers import DistilBertTokenizer
+
 
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
@@ -271,23 +273,24 @@ class MultimodalPretrainingDataset(data.Dataset):
 def multimodal_collate_fn(batch):
     """sort sequence"""
 
-    imgs, cap_len, ids, tokens, attention, path = [], [], [], [], [], []
+    imgs, cap_len, ids, tokens, attention, path, targets = [], [], [], [], [], [], []
 
     # flattern
     for b in batch:
         img, cap, cap_l, p, target = b
         imgs.append(img)
         cap_len.append(cap_l)
-        ids.append(cap["input_ids"])
+        ids.append(cap["input_ids"]) 
         tokens.append(cap["token_type_ids"])
-        attention.append(cap["attention_mask"])
+        attention.append(cap["attention_mask"]) 
         path.append(p)
+        targets.append(target)
         
 
     # stack
     imgs = torch.stack(imgs)
     ids = torch.stack(ids).squeeze()
-    tokens = torch.stack(tokens).squeeze()
+    tokens = torch.stack(tokens).squeeze() 
     attention = torch.stack(attention).squeeze()
 
     # sort and add to dictionary
@@ -299,13 +302,36 @@ def multimodal_collate_fn(batch):
         "imgs": imgs[sorted_cap_indices],
         "cap_lens": sorted_cap_lens,
         "path": path,
+        "targets":targets,
     }
+    return return_dict
 
+def unimodal_collate_fn(batch):
+    """sort sequence"""
+
+    imgs, path, targets = [], [], []
+
+    # flattern
+    for b in batch:
+        img, cap, cap_l, p, target = b
+        imgs.append(img)
+        path.append(p)
+        targets.append(target)
+        
+
+    # stack
+    imgs = torch.stack(imgs)
+
+    return_dict = {
+        "imgs": imgs,
+        "path": path,
+        "targets": torch.tensor(targets),
+    }
     return return_dict
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-diagnosis_map = {"NV":0, "SCC":1, "BKL":2, "AK":3, "BCC":4, "MEL":5, "DF":6, "VASC":7}
+diagnosis_map = DIAGNOSIS_MAP # {"NV":0, "SCC":1, "BKL":2, "AK":3, "BCC":4, "MEL":5, "DF":6, "VASC":7}
 # diagnosis_map = {"MALIGNANT":0, "BENIGN":1, "BENIGN_WITHOUT_CALLBACK":2}
 
 def pil_loader(path):
@@ -326,21 +352,48 @@ def yfcc_loader(root, index):
     return img.convert('RGB')
 
 class ISICTestDataset(torch.utils.data.Dataset):
-    def __init__(self, root, device, context_length=26):
+    def __init__(self, root, device, process_img, context_length=26):
         annotations = pd.read_csv(os.path.join(root,'test_data.csv'))
         self.samples = [(annotations.loc[i,'image_name'], annotations.loc[i, 'description'], annotations.loc[i,'diagnosis']) for i in range(len(annotations))]
         self.root = root
         self.context_length=context_length
         self.device=device
+        self.process_img = process_img
     def __getitem__(self, i):
         image_id, caption, target = self.samples[i]
         path = os.path.join(self.root, 'full_data/', image_id)
-        image = gloria_model.process_img(path, self.device)
+        # image = self.process_img(path, self.device)
         target = diagnosis_map[target]
         # caption = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
-        return image, target
+        return path, caption, target
     def __len__(self):
         return len(self.samples)
+
+    def test_data_collate(self, batch):
+        img_paths, captions, targets = [], [], []
+
+        # flattern
+        for b in batch:
+            img, caption, target = b
+            img_paths.append(img)
+            # captions.append(caption)
+            targets.append(torch.tensor(target))
+            
+        imgs = self.process_img(img_paths, self.device)
+        # stack
+        # imgs = torch.stack(imgs)
+        # captions = torch.stack(captions)
+        targets = torch.stack(targets)
+
+        return_dict = {
+            
+            "imgs": imgs,
+            "captions": captions,
+            "targets": targets,
+        }
+
+        return return_dict
+
 
 class ISICTrainDataset(torch.utils.data.Dataset):
     def __init__(self, cfg, transform, split="train", context_length=26):
@@ -357,8 +410,10 @@ class ISICTrainDataset(torch.utils.data.Dataset):
         self.root = self.cfg.data.root
         self.transform = transform
         # create BERT tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type) 
-
+        if cfg.type=='multimodal':
+            self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type) 
+        else:
+            self.tokenizer=None
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -371,30 +426,32 @@ class ISICTrainDataset(torch.utils.data.Dataset):
         img = pil_loader(path)
         image = self.transform(img)
         target = diagnosis_map[target]
-        tokens = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
-        x_len = len([t for t in tokens["input_ids"][0] if t != 0])
+        if self.tokenizer:
+            tokens = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
+            x_len = len([t for t in tokens["input_ids"][0] if t != 0])
+        else:
+            tokens = None
+            x_len = None
+        
         return image, tokens, x_len, image_id, target
     def __len__(self):
         return len(self.samples)
 
-class CBISValDataset(torch.utils.data.Dataset):
-    def __init__(self, cfg, transform, split="valid", context_length=26):
-        val_path = os.path.join(cfg.data.root, 'val_split_metadata.csv')
-        annotations = pd.read_csv(val_path)
-        self.samples = [(annotations.loc[i,'image_path'], annotations.loc[i, 'description'], annotations.loc[i,'pathology']) for i in range(len(annotations))]
-        self.root = cfg.data.root
-        self.transform = transform
-        # self.tokenizer = tokenizer 
+class CBISTestDataset(torch.utils.data.Dataset):
+    def __init__(self, root, device, process_img, context_length=26):
+        annotations = pd.read_csv(os.path.join(root,'test_data.csv'))
+        self.samples = [(annotations.loc[i,'image_name'], annotations.loc[i, 'description'], annotations.loc[i,'diagnosis']) for i in range(len(annotations))]
+        self.root = root
         self.context_length=context_length
+        self.device=device
+        self.process_img = process_img
     def __getitem__(self, i):
         image_id, caption, target = self.samples[i]
-        path = os.path.join(self.root, image_id)
-        img = pil_loader(path)
-        image = self.transform(img)
+        path = os.path.join(self.root, 'full_data/', image_id)
+        # image = self.process_img(path, self.device)
         target = diagnosis_map[target]
         # caption = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
-        
-        return image, caption, target
+        return path, caption, target
     def __len__(self):
         return len(self.samples)
 
@@ -412,7 +469,10 @@ class CBISTrainDataset(torch.utils.data.Dataset):
         self.root = self.cfg.data.root
         self.transform = transform
         # create BERT tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type) 
+        if cfg.type=='multimodal':
+            self.tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.text.bert_type) 
+        else:
+            self.tokenizer=None
 
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
@@ -423,13 +483,17 @@ class CBISTrainDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         image_id, caption, target = self.samples[i]
-        path = os.path.join(self.root, image_id)
+        path = os.path.join(self.root, 'full_data/', image_id)
         img = pil_loader(path)
         image = self.transform(img)
         target = diagnosis_map[target]
-        tokens = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
-        x_len = len([t for t in tokens["input_ids"][0] if t != 0])
-
+        if self.tokenizer:
+            tokens = self.tokenizer.encode_plus(caption, max_length=self.context_length, padding='max_length', truncation=True, return_tensors='pt')
+            x_len = len([t for t in tokens["input_ids"][0] if t != 0])
+        else:
+            tokens = None
+            x_len = None
+        
         return image, tokens, x_len, image_id, target
     def __len__(self):
         return len(self.samples)

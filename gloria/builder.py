@@ -132,6 +132,8 @@ def build_loss(cfg):
         return loss.segmentation_loss.FocalLoss()
     elif cfg.train.loss_fn.type == "MixedLoss":
         return loss.segmentation_loss.MixedLoss(alpha=cfg.train.loss_fn.alpha)
+    elif cfg.train.loss_fn.type == "CE":
+        return nn.CrossEntropyLoss()
     elif cfg.train.loss_fn.type == "BCE":
         if cfg.train.loss_fn.class_weights is not None:
             weight = torch.Tensor(cfg.train.loss_fn.class_weights)

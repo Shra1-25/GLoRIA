@@ -1,14 +1,15 @@
 experiment_name: 'chexpert_classifier'
 phase: 'classification'
+type: 'unimodal'
 
 lightning:
     trainer:
-       gpus: '1'
-       max_epochs: 50
+       gpus: '0'
+       max_epochs: 15
        distributed_backend: 'dp'
        gradient_clip_val: 0.25
        lr: 1e-4
-       precision: 16
+       precision: 32
     checkpoint_callback:
         monitor: 'val_loss'
         dirpath: './data/ckpt'
@@ -28,26 +29,27 @@ lightning:
 
 model: 
     vision:
-        model_name: 'gloria_resnet50'
+        model_name: 'gloria_resnet50_ISIC_seed_65967'
         freeze_cnn: true
         pretrained: false
-        num_targets: 5
+        num_targets: 8
 
 data: 
-    dataset: chexpert
+    dataset: isic
     image:
-        imsize: 256
+        imsize: 384
+    root: "/scratch/ssc10020/IndependentStudy/SLIP/dataset/ISIC/"
     
 transforms: 
     norm: 'half'
     random_crop:
-        crop_size: 224
+        crop_size: 384
 
 train: 
     batch_size: 64
     num_workers: 16
     loss_fn: 
-        type: BCE
+        type: CE
     optimizer: 
         name: 'Adam'
         weight_decay: 1e-6

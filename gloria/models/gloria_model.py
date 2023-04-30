@@ -101,12 +101,13 @@ class GLoRIA(nn.Module):
         return global_similarities
 
     def get_local_similarities(self, img_emb_l, text_emb_l, cap_lens):
-
+        # import pdb; pdb.set_trace()
         batch_size = img_emb_l.shape[0]
         similarities = []
-
+        
         for i in range(len(text_emb_l)):
             words_num = cap_lens[i]
+            words_num = 10
             word = (
                 text_emb_l[i, :, 1 : words_num + 1].unsqueeze(0).contiguous()
             )  # [1, 768, 25]
@@ -120,7 +121,8 @@ class GLoRIA(nn.Module):
 
             word = word.transpose(1, 2).contiguous()  # [48, 25, 768]
             weiContext = weiContext.transpose(1, 2).contiguous()  # [48, 25, 768]
-
+            
+            
             word = word.view(batch_size * words_num, -1)  # [1200, 768]
             weiContext = weiContext.view(batch_size * words_num, -1)  # [1200, 768]
             #
@@ -163,7 +165,6 @@ class GLoRIA(nn.Module):
             im.save(fullpath)
 
     def process_text(self, text, device):
-
         if type(text) == str:
             text = [text]
 
@@ -218,6 +219,7 @@ class GLoRIA(nn.Module):
         )
 
         if len(text) == 1:
+            
             caption_ids = caption_ids.squeeze(0).to(device)
             attention_mask = attention_mask.squeeze(0).to(device)
             token_type_ids = token_type_ids.squeeze(0).to(device)
@@ -263,7 +265,7 @@ class GLoRIA(nn.Module):
             img = transform(img)
             all_imgs.append(torch.tensor(img))
 
-        all_imgs = torch.stack(all_imgs).to(device)
+        all_imgs = torch.stack(all_imgs) # .to(device)
 
         return all_imgs
 
